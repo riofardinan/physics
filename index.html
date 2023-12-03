@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="style.css">
+    <!-- <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script> -->
+    <script type="text/javascript" src="phaser.min.js"></script>
+</head>
+
+<body>
+    <div id="informatian" class="info">
+        <div class="initialvalue">
+            <div id="heightCannon">Height: 0 m</div>
+            <div id="angle">Angle: 25&deg</div>
+            <div id="speedValue">Speed: 18 m/s</div>
+        </div>
+        <br>
+        <div class="setting">
+            <div class="gravity">
+                <div id="gravityValue">Gravity : 10 m/s</div>
+                <br>
+                <input type="range" id="gravitySlider" min="0" max="30" value="18">
+            </div>
+            <div id="speed">
+                <div id="speedValue">Initial Speed: 18 m/s</div>
+                <br>
+                <input type="range" id="speedSlider" min="0" max="30" value="18">
+            </div>
+        </div>
+        <div class="setting buttonbar">
+            <div class="velocityVector">
+                <div class="checkbox-wrapper-8">
+                    <input class="tgl tgl-skewed" id="velo" type="checkbox" />
+                    <label class="tgl-btn" data-tg-off="OFF" data-tg-on="ON" for="velo"></label>
+                </div>
+                <span>Velocity Vector</span>
+            </div>
+            <div class="accelerationVector">
+                <div class="checkbox-wrapper-8">
+                    <input class="tgl tgl-skewed" id="acc" type="checkbox" />
+                    <label class="tgl-btn" data-tg-off="OFF" data-tg-on="ON" for="acc"></label>
+                </div>
+                <span>Acceleration Vector</span>
+            </div>
+            <div class="slow">
+                <div class="checkbox-wrapper-8">
+                    <input class="tgl tgl-skewed" id="slow" type="checkbox" />
+                    <label class="tgl-btn" data-tg-off="OFF" data-tg-on="ON" for="slow"></label>
+                </div>
+                <span>Slow</span>
+            </div>
+
+
+        </div>
+    </div>
+    <div class="button-play">
+
+        <input type="checkbox" id="play-pause" tabindex="0" /><label class="play-pause" for="play-pause"
+            id="play-pause-label" class="win-button"></label>
+
+
+        <!-- <div>
+            <span class="arrow"></span>
+        </div> -->
+    </div>
+    <div class="information">
+        <span>Shot[<b>Space</b>]</span>
+        <span class="separator">|</span>
+        <span>Clear[<b>C</b>]</span>
+    </div>
+
+    <script>
+
+        class Physics extends Phaser.Scene {
+            constructor() {
+                super({ key: 'Physics' });
+                this.veloVector = document.getElementById('velo');
+                this.accVector = document.getElementById('acc');
+                this.slow = document.getElementById('slow');
+                this.pause = document.getElementById('play-pause');
+                //cannon
+                this.cannon = null;
+                //intial height cannon
+                this.cannonY = 560;
+                //drag height cannon
+                this.isDraggingCannon = false;
+                //cannon pole
+                this.kakiCannon = null;
+                //angle cannon
+                this.angle = Phaser.Math.DegToRad(-25);
+                //cannon x and y axes
+                this.pivotPoint = null;
+                //line bullet
+                this.line = null;
+                //height cannon
+                this.yIncrement = 45; // Kelipatan pergerakan meriam
+                //bullet
+                this.bullets = null;
+                // initial speed
+                this.initialSpeed = 18;
+                //initial gravity
+                this.initialGravity = 10;
+                //initial height cannon
+                this.heightCannon = 0;
+
+                // history shot bullet
+                this.executedSpeed = [];
+                this.executedGravity = [];
+                this.executedAngle = [];
+                this.executedHeight = [];
+
+                //time active bullet
+                this.totalActiveTime = 0;
+                //clear bullet
+                this.clear = false;
+            }
+
+            preload() {
+                this.load.image('bg', 'assets/background4.png');
+                this.load.image('cannon', 'assets/png/canon-tank.png');
+                this.load.image('bullet', 'assets/SVG/boom.svg');
+                this.load.image('kakiCannon', 'assets/SVG/kaki-tank.svg');
+                this.load.image('pirate', 'assets/pirate.png');
+                this.load.image('asap', 'assets/png/asap.png');
+                this.load.image('arrow', 'assets/png/arrow.png');
+            }
+
+            create() {
+                const speed = document.getElementById('speed');
+                const speedSlider = document.getElementById('speedSlider');
+                const speedValues = document.querySelectorAll('#speedValue');
+                const gravitySlider = document.getElementById('gravitySlider');
+                const gravityValue = document.getElementById('gravityValue');
+                const heightCannon = document.getElementById('heightCannon');
+
+                //create background
+                let background = this.add.image(0, 0, 'bg').setOrigin(0, 0);
+                background.displayWidth = this.sys.game.config.width;
+                background.displayHeight = this.sys.game.config.height;
+
+                // create cannon
+                this.cannon = this.add.image(150, this.cannonY, 'cannon');
+                this.cannon.setScale(0.4);
+                this.cannon.setOrigin(0.2, 0.70);
+                this.cannon.setRotation(this.angle);
+                this.cannon.setInteractive({ cursor: 'pointer', useHandCursor: true });
+
+                //create cannon pole
+                this.kakiCannon = this.add.image(150, this.cannonY + 25, 'kakiCannon');
+                this.kakiCannon.setScale(0.48);
+                this.kakiCannon.setInteractive({ draggable: true });
+
+                //create character
+                this.pirate = this.add.image(45, 500, 'pirate');
+                this.pirate.setScale(0.3);
+
+                //create cannon smoke
+                this.asap = this.add.image(150, this.cannonY + 25, 'asap');
+                this.asap.setScale(0.4);
+                this.asap.setOrigin(-2.5, 0.90);
+                this.asap.setRotation(this.angle);
+                this.asap.setVisible(false);
+
+                // Set initial value slider
+                speedSlider.value = this.initialSpeed;
+                gravitySlider.value = this.initialGravity;
+
+                // Menambahkan event listener untuk slider ketika nilainya berubah
+                speedSlider.addEventListener('input', () => {
+                    // Mengatur nilai initialSpeed berdasarkan nilai slider yang baru
+                    this.initialSpeed = parseInt(speedSlider.value);
+                    // Menampilkan nilai slider saat ini
+                    for (let i = 0; i < speedValues.length; i++) {
+                        if (i === 0) {
+                            speedValues[i].innerText = `Speed: ${this.initialSpeed} m/s`;
+                        } else if (i === 1) {
+                            speedValues[i].innerText = `Initial Speed: ${this.initialSpeed} m/s`;
+                        }
+                    }
+                });
+                gravitySlider.addEventListener('input', () => {
+                    // Mengatur nilai initialSpeed berdasarkan nilai slider yang baru
+                    this.initialGravity = parseInt(gravitySlider.value);
+                    // Menampilkan nilai slider saat ini
+                    gravityValue.innerText = `Gravity : ${this.initialGravity} m/s`;
+                    this.physics.world.gravity.y = this.initialGravity * 2;
+                });
+
+                //set gravity game
+                this.physics.world.gravity.y = this.initialGravity * 2;
+
+                // cannon x and y axes
+                this.pivotPoint = this.add.graphics();
+                this.pivotPoint.lineStyle(3, 0xFF0000);
+                const size = 12;
+                const x = this.cannon.x;
+                const y = this.cannon.y;
+                // Y axis
+                this.pivotPoint.lineBetween(x - size, y, x + size, y);
+                // Y axis
+                this.pivotPoint.lineBetween(x, y - size, x, y + size);
+
+                // Bullet group
+                this.bullets = this.physics.add.group({
+                    defaultKey: 'bullet',
+                    // maxSize: 5, // Jumlah maksimal peluru yang akan ada pada saat bersamaan
+                    classType: Phaser.Physics.Arcade.Sprite,
+                    // allowGravity: false, 
+                    immovable: true // Peluru tidak akan bergerak jika bertabrakan dengan sesuatu
+                });
+
+                // line bullet group
+                this.line = this.add.graphics({
+                    lineStyle: {
+                        width: 2,  // Ketebalan garis
+                        color: 0xFF0000,  // Warna garis (misalnya merah)
+                        alpha: 0.7,  // Opasitas garis
+                    }
+                });
+
+                // point bullet per second group
+                this.pointGroup = this.add.group();
+
+                // velocity and acceleration bullet group
+                this.textVector = this.add.group();
+
+                // game world boundaries
+                this.physics.world.setBounds(0, 0, game.config.width, game.config.height - 45, true, false, false, true);
+
+                // event angel cannon
+                this.input.on('pointermove', this.updateCannonAngle, this);
+                this.input.on('pointerdown', this.startCannonRotation, this);
+                this.input.on('pointerup', this.stopCannonRotation, this);
+
+                // event shot bullet
+                this.input.keyboard.on('keydown-SPACE', this.fireBullet, this);
+
+                // event clear bullet
+                this.input.keyboard.on('keydown-C', this.clearBullet, this);
+
+                // event height cannon
+                this.input.on('dragstart', this.startDragCannon, this);
+                this.input.on('drag', this.dragCannon, this);
+                this.input.on('dragend', this.stopDragCannon, this);
+
+                // // line bottom world
+                // const boundaryGraphics = this.add.graphics();
+                // const boundaryColor = 0x00FF00;
+                // const boundaryThickness = 2;
+                // boundaryGraphics.lineStyle(boundaryThickness, boundaryColor);
+                // boundaryGraphics.beginPath();
+                // boundaryGraphics.moveTo(0, this.sys.canvas.height - 45);
+                // boundaryGraphics.lineTo(this.sys.canvas.width, this.sys.canvas.height - 45);
+                // boundaryGraphics.closePath();
+                // boundaryGraphics.strokePath();
+            }
+
+            // clear bullet
+            clearBullet() {
+                this.clear = true;
+                this.bullets.clear(true, true);
+                this.textVector.clear(true, true);
+                this.line.clear(true, true);
+                this.pointGroup.clear(true, true);
+                this.executedSpeed.splice(0, this.executedSpeed.length);
+                this.executedGravity.splice(0, this.executedGravity.length);
+                this.executedAngle.splice(0, this.executedAngle.length);
+                this.executedHeight.splice(0, this.executedHeight.length);
+                if (this.accVector.checked) {
+                    this.acceleration.clear(true, true);
+                }
+                if (this.veloVector.checked) {
+                    this.velocity.clear(true, true);
+                }
+            }
+
+            // height cannon
+            startDragCannon(pointer, gameObject) {
+                this.isDraggingCannon = true;
+            }
+            dragCannon(pointer, gameObject, dragX, dragY) {
+                if (this.isDraggingCannon) {
+                    // Set max and min height cannon
+                    const minY = 110;
+                    const maxY = this.cannonY;
+
+                    const newPositionY = maxY - Math.floor((maxY - dragY) / this.yIncrement) * this.yIncrement;
+
+                    this.cannon.y = Phaser.Math.Clamp(newPositionY, minY, maxY); // Batas atas dan bawah yang diizinkan
+                    this.kakiCannon.y = Phaser.Math.Clamp(newPositionY + 25, minY + 25, maxY + 25); // Batas atas dan bawah yang diizinkan
+
+                    this.heightCannon = (maxY - this.cannon.y) / this.yIncrement;
+
+                    // print height cannon
+                    heightCannon.innerText = `Height : ${this.heightCannon} m`;
+
+                    // set cannon x and y axes if height changes
+                    const size = 12;
+                    const x = this.cannon.x;
+                    const y = this.cannon.y;
+                    this.pivotPoint.clear();
+                    this.pivotPoint.lineStyle(2, 0xFF0000);
+                    // X Axis
+                    this.pivotPoint.lineBetween(x - size, y, x + size, y);
+                    // Y Axis
+                    this.pivotPoint.lineBetween(x, y - size, x, y + size);
+
+                    // check height cannon if low
+                    if (this.cannon.y >= 540) {
+                        this.angle = Phaser.Math.DegToRad(-25); // max angke
+                        this.cannon.setRotation(Phaser.Math.DegToRad(-25));
+                    }
+                    if (this.cannon.y >= 440 && this.cannon.y < 540) {
+                        this.angle = Phaser.Math.DegToRad(5); // max angle
+                        this.cannon.setRotation(Phaser.Math.DegToRad(5));
+                    }
+                }
+            }
+            stopDragCannon() {
+                this.isDraggingCannon = false;
+            }
+
+            // angle cannon
+            startCannonRotation() {
+                if (!this.isDraggingCannon) {
+                    this.isRotatingCannon = true;
+                }
+            }
+            updateCannonAngle(pointer) {
+                if (this.isRotatingCannon) {
+                    // set angle
+                    const angle = Phaser.Math.Angle.Between(this.cannon.x, this.cannon.y, pointer.x, pointer.y);
+
+                    // set angle limit
+                    var minAngle = Phaser.Math.DegToRad(-90); // Batas sudut minimum (90 derajat ke bawah)
+                    var maxAngle = Phaser.Math.DegToRad(90);  // Batas sudut maksimum (90 derajat ke atas)
+
+                    // check height cannon if low
+                    if (this.cannon.y >= 540) {
+                        minAngle = Phaser.Math.DegToRad(-90);
+                        maxAngle = Phaser.Math.DegToRad(-25);
+                    }
+                    if (this.cannon.y >= 440 && this.cannon.y < 540) {
+                        minAngle = Phaser.Math.DegToRad(-90);
+                        maxAngle = Phaser.Math.DegToRad(5);
+                    }
+
+                    var angleDeg = Math.round(Phaser.Math.RadToDeg(angle));
+
+                    if (angle < minAngle) {
+                        this.angle = minAngle;
+                    } else if (angle > maxAngle) {
+                        this.angle = maxAngle;
+                    } else {
+                        this.angle = Phaser.Math.DegToRad(angleDeg);
+                    }
+
+                    this.cannon.setRotation(this.angle);
+                    this.asap.setRotation(this.angle);
+
+                    // print angle value
+                    const angleValue = document.getElementById('angle');
+                    angleValue.innerText = `Angle : ${Math.floor(Phaser.Math.RadToDeg(this.angle)) * -1}°`;
+                }
+            }
+            stopCannonRotation() {
+                this.isRotatingCannon = false;
+            }
+
+            // shot bullet
+            fireBullet() {
+                const bullet = this.bullets.getFirstDead(true);
+                if (bullet) {
+                    this.clear = false;
+                    this.totalActiveTime = 0;
+
+                    bullet.setActive(true);
+                    bullet.setVisible(true);
+
+                    const initialSpeed = this.initialSpeed * 10;
+                    var angle = this.angle;
+
+                    bullet.setVelocityX(initialSpeed * Math.cos(angle));
+                    bullet.setVelocityY(initialSpeed * Math.sin(angle));
+                    bullet.setPosition(this.cannon.x, this.cannon.y);
+                    bullet.setCollideWorldBounds(false);
+                    bullet.setScale(0.2);
+                    bullet.prevX = this.cannon.x;
+                    bullet.prevY = this.cannon.y;
+
+                    let continueLoop = true; // Variabel untuk mengontrol looping
+
+                    bullet.loop = true;
+
+                    bullet.body.onWorldBounds = true; // memicu event 'worldbounds'
+                    this.physics.world.on('worldbounds', function (body) {
+                        // memeriksa apakah peluru yang bertabrakan dengan batas dunia
+                        if (body.gameObject === bullet) {
+                            body.gameObject.setVelocity(0); // menghentikan peluru
+                            continueLoop = false; // Menghentikan looping jika peluru mencapai tanah/batas dunia
+                            bullet.loop = false;
+
+                            // delete velocity and acceleratin vector if hits ground
+                            if (this.veloVector.checked && bullet.velocity) {
+                                bullet.velocity.destroy();
+                            }
+                            if (this.accVector.checked && bullet.acceleration) {
+                                bullet.acceleration.destroy();
+                            }
+                        }
+                    }, this);
+
+                    // set smoke animation
+                    this.asap.setVisible(true);
+
+                    // Sembunyikan kembali asap setelah beberapa waktu
+                    this.tweens.add({
+                        targets: this.asap,
+                        alpha: { from: 0, to: 1.2 }, // Fading in
+                        duration: 500, // Durasi animasi
+                        yoyo: true, // Mengulangi dari alpha 1 ke alpha 0
+                        onComplete: () => {
+                            this.asap.setVisible(false); // Sembunyikan asap setelah fading
+                        }
+                    });
+
+                    let time = 0;
+                    let delay = 0;
+
+                    // set delay if slow mode 
+                    if (this.slow.checked) {
+                        delay = 600;
+                    } else {
+                        delay = 100;
+                    }
+
+                    // check history bullet
+                    if (!this.executedSpeed.includes(this.initialSpeed) || !this.executedGravity.includes(this.initialGravity) || !this.executedAngle.includes(Phaser.Math.RadToDeg(this.angle)) || !this.executedHeight.includes(this.heightCannon)) {
+
+                        // add history bullet
+                        this.executedSpeed.push(this.initialSpeed);
+                        this.executedGravity.push(this.initialGravity);
+                        this.executedAngle.push(Phaser.Math.RadToDeg(this.angle));
+                        this.executedHeight.push(this.heightCannon);
+
+                        // Jika belum ada, tambahkan nilai ini ke dalam executedSpeed
+                        const event = this.time.addEvent({
+                            delay: delay, // delay
+                            callback: () => {
+                                // check pause mode
+                                if (this.pause.checked) {
+                                    return;
+                                }
+                                // check clear bullet
+                                if (this.clear == true) {
+                                    event.remove();
+                                    return; // Exit the callback early
+                                }
+
+                                // create point bullet
+                                const point = this.add.circle(bullet.x, bullet.y, 3, 0x00FF00); // Membuat titik merah
+                                this.pointGroup.add(point);
+
+                                time += 100;
+
+                                const currentTime = time;
+                                var rangePerSekon = currentTime * 0.001;
+                                const currentDistance = this.initialSpeed * Math.cos(this.angle) * rangePerSekon.toFixed(1);
+                                const currentHeight = ((this.initialSpeed * Math.sin(this.angle * -1)) * rangePerSekon.toFixed(1)) - (0.5 * this.initialGravity * rangePerSekon.toFixed(1) ** 2) + this.heightCannon;
+                                point.setData({
+                                    time: currentTime / 1000, // Konversi waktu ke detik
+                                    range: currentDistance,
+                                    height: currentHeight,
+                                });
+
+                                // Tambahkan event untuk menampilkan info saat dihover
+                                point.setInteractive();
+                                let textObject;
+                                point.on('pointerover', () => {
+                                    const time = point.data.values.time;
+                                    const range = point.data.values.range;
+                                    const height = point.data.values.height;
+                                    const text = `Time: ${time.toFixed(1)} s\nRange: ${range.toFixed(2)} m\nHeight: ${height.toFixed(2)} m`;
+                                    textObject = this.add.text(point.x, point.y - 20, text, { fill: 'black', fontWeight: 'bold' }); // Menambahkan teks di atas titik
+                                    textObject.setOrigin(0.5, 1); // Mengatur titik anchor teks agar di bawah titik
+                                    textObject.setData({ relatedPoint: point }); // Menyimpan referensi ke titik dalam teks objek
+
+                                });
+                                point.on('pointerout', () => {
+                                    if (textObject) {
+                                        textObject.destroy(); // Menghapus objek teks jika ada
+                                    }
+                                });
+
+                                // check jika bullet menyentuh tanah
+                                if (!continueLoop) {
+                                    this.totalActiveTime = 0;
+                                    event.remove();
+
+                                    time = 0;
+
+                                    const lastPoint = this.add.circle(bullet.x, bullet.y, 3, 0x00FF00);
+                                    this.pointGroup.add(lastPoint);
+
+                                    const maxTime = 2 * this.initialSpeed * Math.sin(this.angle * -1) / this.initialGravity; // Konversi waktu ke detik
+                                    const maxRange = (this.initialSpeed * this.initialSpeed) * Math.sin(this.angle * -2) / this.initialGravity;
+                                    const currentHeight = ((this.initialSpeed * Math.sin(this.angle * -1)) * maxTime.toFixed(2)) - (0.5 * this.initialGravity * maxTime.toFixed(2) ** 2); // Ketinggian dari batas bawah/tanah
+
+                                    lastPoint.setData({
+                                        time: maxTime,
+                                        range: maxRange,
+                                        height: currentHeight,
+                                    });
+
+                                    lastPoint.setInteractive();
+                                    lastPoint.on('pointerover', () => {
+                                        const time = lastPoint.data.values.time;
+                                        const range = lastPoint.data.values.range;
+                                        const height = lastPoint.data.values.height;
+                                        const text = `Time: ${time.toFixed(2)} s\nRange: ${range.toFixed(2)} m\nHeight: ${Math.round(height)} m`;
+                                        textObject = this.add.text(point.x, point.y - 20, text, { fill: 'black', fontWeight: 'bold' }); // Menambahkan teks di atas titik
+                                        textObject.setOrigin(0.5, 1); // Mengatur titik anchor teks agar di bawah titik
+                                        textObject.setData({ relatedPoint: point }); // Menyimpan referensi ke titik dalam teks objek
+
+
+                                    });
+                                    lastPoint.on('pointerout', () => {
+                                        if (textObject) {
+                                            textObject.destroy(); // Menghapus objek teks jika ada
+                                        }
+                                    });
+                                }
+                            },
+                            loop: true,
+                        });
+                    }
+                    // set agar bullet tidak nyangkut saat pertama kali menembak
+                    setTimeout(() => {
+                        bullet.setCollideWorldBounds(true);
+                    }, 150);
+                    event.preventDefault();
+                }
+
+            }
+
+            update() {
+                //check slow mode
+                if (this.slow.checked) {
+                    this.physics.world.timeScale = 1.198;
+                } else {
+                    this.physics.world.timeScale = 0.198;
+                }
+
+                this.bullets.children.iterate((bullet) => {
+                    //check pause mode
+                    if (this.pause.checked) {
+                        bullet.body.enable = false;
+                    } else {
+                        if (bullet.loop) {
+                            // check slow mode
+                            if (this.slow.checked) {
+                                this.totalActiveTime += 2.8;
+                            } else {
+                                this.totalActiveTime += 16.8;
+                            }
+                        }
+                        bullet.body.enable = true;
+                    }
+                    if (bullet.active) {
+                        if (bullet.accVec) {
+                            // Delete acceleration vector
+                            bullet.accVec.destroy();
+                        }
+                        if (bullet.velVec) {
+                            // Delete velocity vector
+                            bullet.velVec.destroy();
+                        }
+
+                        // time 
+                        bullet.totalActiveTime = this.totalActiveTime;
+                        // vector y
+                        let vy = this.initialSpeed * Math.sin(this.angle * -1) - this.initialGravity * (bullet.totalActiveTime / 1000);
+                        // vector x
+                        let vx = this.initialSpeed * Math.cos(this.angle);
+
+                        // check acceleration vector active
+                        if (this.accVector.checked) {
+                            if (!bullet.acceleration) {
+                                // create acceleration vector
+                                this.acceleration = this.add.graphics();
+
+                                this.acceleration.fillStyle(0xF28500);
+                                this.acceleration.fillRect(-2, bullet.y, 4, 100); // Koordinat relatif terhadap panah
+                                // acceleration.fillRect(-2, bullet.y, (vx * -1) * 10, 4); // Koordinat relatif terhadap panah
+                                this.acceleration.x = bullet.x;
+
+                                bullet.acceleration = this.acceleration;
+
+                                this.acceleration.setDepth(0);
+                            }
+                            if (bullet.loop) {
+                                const text = `a = ${this.initialGravity}`;
+
+                                // Create text acceleration vector
+                                bullet.accVec = this.add.text(bullet.x, bullet.y - 5, text, { fill: 'black', fontWeight: 'bold' });
+                                bullet.accVec.setOrigin(1.6, 1);
+                                this.textVector.add(bullet.accVec);
+                            }
+
+                            const acceleration = bullet.acceleration;
+                            acceleration.clear();
+                            acceleration.fillStyle(0xF28500);
+                            acceleration.fillRect(-2, bullet.y, 4, this.initialGravity * 10);
+                            // arrow.fillTriangle(0, -15, -5, 15, 5, 15); // Koordinat relatif terhadap panah
+                            acceleration.x = bullet.x;
+
+                            this.acceleration.setDepth(0);
+                        }
+                        // check velocity vector
+                        if (this.veloVector.checked) {
+                            if (!bullet.velocity) {
+                                // create velocity vector
+                                this.velocity = this.add.graphics();
+
+                                this.velocity.fillStyle(0x8B4513);
+                                this.velocity.fillRect(-2, bullet.y, 4, (vy * -1) * 10); // Koordinat relatif terhadap panah
+                                this.velocity.fillRect(-2, bullet.y, (vx * -1) * 10, 4); // Koordinat relatif terhadap panah
+                                this.velocity.x = bullet.x;
+
+                                bullet.velocity = this.velocity;
+
+                                this.velocity.setDepth(1); // set velocity higher
+
+                            }
+                            if (bullet.loop) {
+                                let text = `Vx = ${vx.toFixed(2)}\nVy = ${vy.toFixed(2)}`;
+
+                                // Create text velocity vector
+                                bullet.velVec = this.add.text(bullet.x, bullet.y - 20, text, { fill: 'black', fontWeight: 'bold' });
+                                bullet.velVec.setOrigin(1.2, 1);
+                                this.textVector.add(bullet.velVec);
+                            }
+
+                            const arrow = bullet.velocity;
+                            arrow.clear();
+                            arrow.fillStyle(0x000000);
+                            arrow.fillStyle(0x8B4513);
+                            arrow.fillRect(-2, bullet.y, 4, (vy * -1) * 10); // Koordinat relatif terhadap panah
+                            arrow.fillRect(-2, bullet.y, (vx) * 10, 4); // Koordinat relatif terhadap panah
+
+                            arrow.x = bullet.x;
+
+                            arrow.setDepth(1); // set velocity higher
+                        }
+
+                        this.line.lineBetween(bullet.x, bullet.y, bullet.prevX, bullet.prevY);
+                        // Simpan posisi sebelumnya untuk frame berikutnya
+                        bullet.prevX = bullet.x;
+                        bullet.prevY = bullet.y;
+                    }
+
+                });
+            }
+
+
+        }
+
+        const config = {
+            type: Phaser.AUTO,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scale: {
+                mode: Phaser.Scale.FIT,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            scene: Physics,
+            physics: {
+                default: 'arcade',
+                arcade: {
+                    // gravity: { y: 10 }
+                }
+            }
+        };
+
+        const game = new Phaser.Game(config);
+
+    </script>
+
+</body>
+
+</html>
